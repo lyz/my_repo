@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2003-2006 Adobe Macromedia Software LLC and its licensors.
+// All Rights Reserved.
+// The following is Sample Code and is subject to all restrictions on such code
+// as contained in the End User License Agreement accompanying this product.
+// If you have received this file from a source other than Adobe,
+// then your use, modification, or distribution of it requires
+// the prior written permission of Adobe.
+//
+////////////////////////////////////////////////////////////////////////////////
+-->
+<mx:Application pageTitle="FlexStore"
+				layout="absolute" 
+				minWidth="990" minHeight="550"
+			    preinitialize="onLoadTheme()"
+			    creationComplete="onLoadCatalog()"
+			    xmlns:screens="com.flexstore.view.screens.*"
+			    xmlns:mx="http://www.adobe.com/2006/mxml">
+
+    <mx:Style source="assets/css/main.css"/>
+
+    <mx:Script>
+    <![CDATA[
+    	import mx.events.StyleEvent;
+
+    	import com.flexstore.view.skins.StoreButtonBarButtonSkin;
+    	import com.flexstore.control.events.catalog.LoadCatalogEvent;
+    	import com.flexstore.model.utils.ThemeLoader;
+    	import com.flexstore.model.ModelLocator;
+
+        // ******************************************************
+        // Public properties
+        // ******************************************************
+		
+			/**
+			  * Override of initialized method to defer application initialization
+			  * finish until AFTER the runtime style has been loaded
+			  * @param value Has the UIComponent/application been initialized
+			  */
+	        override public function set initialized(value:Boolean):void	{
+	            // Hold off until the Runtime CSS SWF is done loading.
+	        }
+	        
+        // ******************************************************
+        // Private Event Handlers 
+        // ******************************************************
+        
+	        /**
+	          * Wrapper function to invoke a call to load the catalog XML data
+	          * @private
+	          */
+	        private function onLoadCatalog():void {
+	        	var event : LoadCatalogEvent = new LoadCatalogEvent();
+	        	event.dispatch();
+	        }
+	
+        // ******************************************************
+        // Private Methods and Handlers for Themes  
+        // ******************************************************
+        
+			private function onLoadTheme():void {
+				// Initially load 'beige' theme
+				__themeMngr.loadTheme(ThemeLoader.THEME_BIEGE);
+			}
+
+			/**
+			  * Result handler to support runtime loading of styles. 
+			  * Allows manually updating to images and button skins [bug in FB3 Beta]
+			  * @private
+			  */
+	        private function onResults_loadStyles(event:StyleEvent):void {
+	            imgHeader.source = viewHeader.getStyle("storeLogo");
+	            screenHome.updateMapImage();
+	            
+	        	var btnCSS : CSSStyleDeclaration = StyleManager.getStyleDeclaration(".storeButton"); 
+		            btnCSS.setStyle("selectedOverSkin", StoreButtonBarButtonSkin);
+		            btnCSS.setStyle("selectedUpSkin", 	StoreButtonBarButtonSkin);
+		            btnCSS.setStyle("overSkin", 		StoreButtonBarButtonSkin);
+	            
+	            
+	            super.initialized = true;
+	        }
+	
+        // ******************************************************
+        // Private Constants and Attributes 
+        // ******************************************************
+        
+		[Bindable]  private var     __model             : ModelLocator      = ModelLocator.getInstance(); 			
+        			private var 	__themeMngr		  	: ThemeLoader		= new ThemeLoader(onResults_loadStyles);
+
+    ]]>
+    </mx:Script>
+	
+	<control:StoreController						xmlns:control="com.flexstore.control.*" />
+	<rds:Services 				id="storeServices" 	xmlns:rds="com.flexstore.control.delegates.*" />
+
+	<!-- Application UI content area -->
+    <mx:VBox width="990" paddingLeft="0" paddingRight="0" horizontalCenter="0" top="12">
+    
+        <mx:ApplicationControlBar id="viewHeader" width="100%" styleName="storeControlBar">        
+            <mx:Image id="imgHeader"  toolTip="Change Theme" click="__themeMngr.toggleTheme();" />
+            <mx:ToggleButtonBar   height="100%" dataProvider="{storeViews}"  styleName="storeButtonBar"/>        
+        </mx:ApplicationControlBar>
+
+        <mx:ViewStack id="storeViews" width="100%" height="550" creationPolicy="all">
+            <screens:HomeView 		id="screenHome"     label="Home"									showEffect="WipeDown" hideEffect="WipeUp"	/>
+            <screens:ProductsView 	id="screenProducts" label="Products" catalog="{__model.catalog}"	showEffect="WipeDown" hideEffect="WipeUp"	/>
+            <screens:SupportView 	id="screenSupport"  label="Support"									showEffect="WipeDown" hideEffect="WipeUp"	/>
+        </mx:ViewStack>
+    </mx:VBox>
+
+</mx:Application>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2003-2006 Adobe Macromedia Software LLC and its licensors.
+// All Rights Reserved.
+// The following is Sample Code and is subject to all restrictions on such code
+// as contained in the End User License Agreement accompanying this product.
+// If you have received this file from a source other than Adobe,
+// then your use, modification, or distribution of it requires
+// the prior written permission of Adobe.
+//
+////////////////////////////////////////////////////////////////////////////////
+-->
+<!-- width and height hard-coded in the root tag to better support the 
+     Design view in FlexBuilder since we know the width and height from the 
+     settings in flexstore.mxml -->
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" 
+	xmlns:tools="com.flexstore.view.common.*"
+    width="990" height="550"
+    currentState="{__model.catalogState}">
+
+    <mx:Script>
+        <![CDATA[
+        	import com.flexstore.control.events.shoppingcart.AddProductToCartEvent;
+        	import mx.core.UIComponent;
+        	import com.flexstore.model.ModelLocator;
+        	import com.flexstore.model.OrderCart;
+	        import mx.collections.ArrayCollection;
+	        import com.flexstore.model.vo.Product;
+	                
+	       	import com.flexstore.model.vo.Product;
+	
+			
+	        [Bindable]
+	        public function get catalog():ArrayCollection	{
+	            return __catalog;
+	        }
+	        
+	        public function set catalog(products:ArrayCollection):void	{
+	        	if (products != __catalog) {
+		            __catalog = products;
+		            if (filterPanel != null) filterPanel.filter.count = __catalog.length;
+		        }
+		    }
+	        
+	        public function onCompareSelectedProducts(event:Event):void {
+	        	// Note: This is a view-level event... 
+	        	catalogDisplay.compareSelectedProducts(__model.compareCart.products);
+	        }
+	        
+        	// FIXME: use AddToCompareEvent and CartCommand
+	        public function onAddToCompare(product:Product):void {
+	            __model.catalogState = 'showFilter';
+	            __model.compareCart.addItem(product);
+	        }
+	        
+	        public function onAddToCart(product:Product):void {
+	            new AddProductToCartEvent(product).dispatch();
+	        }
+
+	        		  private var __catalog		 : ArrayCollection = null;
+		   [Bindable] private var __model        : ModelLocator    = ModelLocator.getInstance();	       	       
+	       
+        ]]>
+    </mx:Script>
+    
+    <mx:states>
+       <mx:State name="showFilter">
+          <mx:SetStyle target="{catalogDisplay}" name="left" value="285"/>
+       </mx:State>        
+       <mx:State name="showCart">
+           <mx:SetStyle target="{catalogDisplay}" name="right" value="285"/>
+       </mx:State>
+    </mx:states>
+    
+    <!-- 
+      make sure to use transitions here instead of applying a Move effect
+      to the Panel itself which will result in odd behavior
+    -->
+    <mx:transitions>
+       <mx:Transition fromState="*" toState="*">
+          <mx:Move target="{catalogDisplay}" />
+       </mx:Transition>
+    </mx:transitions>
+        
+
+    <mx:HBox styleName="colorPanel" dropShadowEnabled="true"  height="100%" width="100%" verticalScrollPolicy="off"  horizontalGap="0">
+    
+        <tools:Grip id="filterGrip" gripIcon="@Embed('/assets/icon_magnifier.png')" 
+            gripTip="Show filter panel" click="__model.catalogState = 'showFilter'"/>
+    
+        <search:ProductFilterPanel id="filterPanel" width="265" height="100%"
+            filter="catalogDisplay.filter(event.filter, event.live)"
+            compare="onCompareSelectedProducts(event);"
+            creationComplete="if (catalog) filterPanel.filter.count = catalog.length" xmlns:search="com.flexstore.view.products.search.*"/>
+    
+        <mx:Spacer width="100%"/>
+        
+        <cart:ProductCart id="cartPanel" width="265" height="100%" xmlns:cart="com.flexstore.view.products.cart.*"/>
+
+        <tools:Grip id="cartGrip" gripIcon="@Embed('/assets/icon_cart_empty.png')"
+            gripTip="Show cart" click="__model.catalogState = 'showCart'"/>
+    
+    </mx:HBox>
+        
+    <browser:ProductCatalogPanel id="catalogDisplay" y="4" width="685" height="540"
+        catalog="{catalog}"
+        compare="onAddToCompare(event.product)"
+        purchase="onAddToCart(event.product)"
+        cartCount="{__model.shoppingCart.numProducts}" xmlns:browser="com.flexstore.view.products.browser.*"/>
+    
+</mx:Canvas>

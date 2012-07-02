@@ -1,0 +1,595 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2003-2006 Adobe Macromedia Software LLC and its licensors.
+// All Rights Reserved.
+// The following is Sample Code and is subject to all restrictions on such code
+// as contained in the End User License Agreement accompanying this product.
+// If you have received this file from a source other than Adobe,
+// then your use, modification, or distribution of it requires
+// the prior written permission of Adobe.
+//
+////////////////////////////////////////////////////////////////////////////////
+-->
+<mx:Panel xmlns:mx="http://www.adobe.com/2006/mxml" 
+    layout="vertical" 
+    currentState="browse"
+    verticalScrollPolicy="off"
+    horizontalScrollPolicy="off"
+    styleName="catalogPanel">
+    
+    <mx:Metadata>
+        [Event(name="purchase", type="com.flexstore.view.products.browser.ProductThumbEvent")]
+        [Event(name="compare", type="com.flexstore.view.products.browser.ProductThumbEvent")]
+        [Event(name="details", type="com.flexstore.view.products.browser.ProductThumbEvent")]
+    </mx:Metadata>
+    
+    <mx:Script>
+        <![CDATA[
+	        import flash.utils.Dictionary;
+	        
+	        import mx.collections.ArrayCollection;
+	        import mx.collections.IViewCursor;
+	        import mx.core.DragSource;
+	        import mx.core.IUIComponent;
+	        import mx.effects.Effect;
+	        import mx.effects.Fade;
+	        import mx.effects.Move;
+	        import mx.events.EffectEvent;
+	        import mx.events.DragEvent;
+	        import mx.managers.DragManager;
+	
+	        import com.flexstore.model.vo.Product;
+	    	import com.flexstore.view.products.search.ProductFilter;
+	    	import com.flexstore.view.screens.ProductsView;
+	        import com.flexstore.view.products.search.ProductFilterEvent;
+	        import com.flexstore.view.products.browser.ProductThumbEvent;
+	       
+	     
+	        [Bindable] public var cartCount : int = 0;
+	        
+	        [Bindable]
+	        public function get catalog():ArrayCollection {
+	            return __catalog;
+	        }
+	        public function set catalog(products:ArrayCollection):void {
+	        	if (products != __catalog) {
+		            __catalog        = (products == null) ? new ArrayCollection() : products;
+		            __catalogChanged = true;
+		            
+		            invalidateProperties();
+	         	}
+	        }
+	        
+	        public function filter(productFilter:ProductFilter, live:Boolean):void {
+	            currentState = "browse";
+	            __thumbnailState = "browse";
+	            
+	            animateFiltering(productFilter,live);
+	        }
+	        
+	        
+	        public function compareSelectedProducts(products:ArrayCollection = null):void {
+	            currentState     = "compare";
+	            __thumbnailState = "compare";
+	            
+	            if (products != null)	{
+	            	// Clear products to be displayed in panel
+	                // Select only products specified in comparison list
+					__accepted = new Dictionary(true);
+
+					for each (var it:Product in products) {
+						var product : Product = findByID(it.productId);
+	                	if (product != null) showProduct(product);
+					}	            	            	
+	            }
+	            
+	            animateComparisons();
+	        }
+	        
+        
+	        public function showDetails(product:Product):void {
+	            if (currentState == "details")
+				{
+	                details.product = product;
+	                return;
+	            }
+	
+				animateShowProductDetails(product);
+	        }
+
+	        // *************************************************************
+	        // Component Invalidation Methods
+	        // *************************************************************
+	        
+	        override protected function createChildren():void {
+	            super.createChildren();
+	            titleButtons = new CatalogTitleButtons();
+	            titleBar.addChild(titleButtons);
+	            
+	        }
+	
+	        override protected function layoutChrome(unscaledWidth:Number, unscaledHeight:Number):void
+	        {        
+	            super.layoutChrome(unscaledWidth, unscaledHeight);
+	            //when adding to a UIComponent (not a Container) need explicit width/height
+	            titleButtons.width = unscaledWidth / 2; //make it big so as we add cart items we can stretch)
+	            titleButtons.height = titleButtons.measuredHeight;
+	            
+	            //this placement algorithm is pretty hacky, there are better ways that probably
+	            //involve copying more of the Panel layoutChrome method and supporting methods
+	            titleButtons.move(statusTextField.x - titleButtons.width, titleTextField.y);
+	        }
+	        
+	        override protected function commitProperties():void {
+	        	super.commitProperties();
+	        	
+	        	if (__catalogChanged == true) {
+	        		__catalogChanged = false;
+	        		
+	        		__startAnimate = true;
+	        		createThumbnails();
+	        		
+	        		invalidateDisplayList();
+	        	}
+	        }
+	        
+	        override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+	        	super.updateDisplayList(unscaledWidth,unscaledHeight);
+	        	
+	        	if (__startAnimate == true) {
+	        		  __startAnimate = false;
+	        		  animateLayouts();
+	        	}
+	        }
+	        
+	        //----------------------------------------------------------------------
+	        // Private Thumbnail Methods
+	        //----------------------------------------------------------------------
+	       
+	       	private function removeAllThumbnails():void {
+	       		thumbContent.removeAllChildren();
+
+	       		__thumbnails = [];
+	       		__accepted   = new Dictionary();
+	       		
+	       		__filerCount = catalog.length;
+	       	}
+
+			private function makeThumbnail(product:Product):ProductCatalogThumbnail {
+				var thumb : ProductCatalogThumbnail = null;
+				
+				if (product != null) {
+	                thumb = new ProductCatalogThumbnail();
+	                thumb.product = product;
+	                
+	                thumb.addEventListener(ProductThumbEvent.PURCHASE, 	onProductSelected, 	false, 0, true);
+	                thumb.addEventListener(ProductThumbEvent.COMPARE, 	onProductSelected, 	false, 0, true);
+	                thumb.addEventListener(ProductThumbEvent.DETAILS, 	onProductSelected, 	false, 0, true);
+	                thumb.addEventListener(DragEvent.DRAG_START,		onDragStart, 		false, 0, true);
+				}	
+				
+				return thumb;
+			}
+			
+	        private function createThumbnails():void
+	        {
+	        	removeAllThumbnails();
+	        	
+	        	for each (var product:Product in catalog) {
+	        		var thumb : ProductCatalogThumbnail = makeThumbnail(product);	
+	                __thumbnails.push(thumb);
+	                showProduct(product)
+
+	                thumbContent.addChild(thumb);
+	        	}
+	        }
+	        
+			// ********************************************************************
+			// Private Event Handlers
+			// ********************************************************************
+	        
+	        private function onDragStart(event:MouseEvent):void
+	        {
+	            if (DragManager.isDragging == false)
+	            {
+	                var thumb:ProductCatalogThumbnail = event.target as ProductCatalogThumbnail;
+	                var ds:DragSource = new DragSource();
+	                ds.addData(thumb.product, "product");
+	
+	                var di:ProductCatalogThumbnail = new ProductCatalogThumbnail();
+	                di.product = thumb.product;
+	                
+	                //the offset logic is honestly not the most intuitive but
+	                //it's necessary to get the dragProxy positioned correctly
+	                DragManager.doDrag(thumbContent, ds, event, di, -thumb.x, 
+	            				       -thumb.y + thumbContent.verticalScrollPosition, 
+	            				       0.5, false);
+	            }    
+	        }
+	        
+	        private function onProductSelected(event:ProductThumbEvent):void	{
+	        	
+				switch(event.type) {
+					case ProductThumbEvent.BROWSE	:	if (__thumbnailState == "browse")	{                
+										                    currentState = "browse";
+										                    animateLayouts();
+										                } else {
+										                    compareSelectedProducts();
+										                }
+														break;
+														
+					case ProductThumbEvent.DETAILS	:	showDetails(event.product); 	break;	
+					default							:	dispatchEvent(event);			break;
+				}	        	
+	        }
+	        
+	        private function onCompareAnimationEnd():void {
+	            //avoid an issue if the user clicks quickly where we move into
+	            //compare state even though we're no longer in compare
+	            if (currentState == "compare") {
+					for each ( var thumb:ProductCatalogThumbnail in __thumbnails) {
+						var product : Product = thumb.product;
+						if (isShowing(product) == true) thumb.currentState = "compare";	
+					}
+	            }
+	        }
+	        
+        	// *******************************************************************
+        	// Private animate of layouts with moves and fades
+        	// *******************************************************************
+			private function animateFiltering(filter:ProductFilter, live:Boolean=true):void {
+	            var count  :  int=0;
+	            var targets:  Array = [];
+	            
+	            var fadeOut:  Fade = new Fade();
+		            fadeOut.alphaFrom = 1;
+		            fadeOut.alphaTo   = .1;
+	            
+	            for each(var thumb : ProductCatalogThumbnail in __thumbnails) {
+	                var product:Product = thumb.product;
+
+	                if (filter.accept(product))	{
+	                    
+	                    showProduct(product);
+	                    thumb.alpha = 1;    
+	                    count++;
+	                    
+	                } else {
+	                    
+	                    showProduct(product,false);
+	                    
+	                    //only fade if we hadn't started
+	                    if      (live)					thumb.alpha = .1;
+	                    else if (thumb.alpha == 1) 		targets.push(thumb);
+	                }
+	            }
+	            
+	            filter.count = count;
+	            __filerCount = count;
+	
+	            if (targets.length > 0)    
+	            {
+	                fadeOut.targets = targets;
+	                fadeOut.play();
+	                fadeOut.addEventListener(EffectEvent.EFFECT_END,
+						                    function(event:EffectEvent):void {
+						                        animateLayouts();
+						                    });
+	            }
+	            else if (!live)
+	            {
+	                animateLayouts();
+	            }				
+			}
+
+			private function animateComparisons():void {
+	            var lastEffect:Effect = animateLayouts();
+	            if (lastEffect != null)
+	            {
+	                lastEffect.addEventListener(EffectEvent.EFFECT_END,
+	                    function (event:EffectEvent):void
+	                    {
+	                        onCompareAnimationEnd();
+	                    }, false, 0, true);
+	            }
+	            else
+	            {
+	                onCompareAnimationEnd();
+	            }				
+			}   
+			     	        
+			private function animateShowProductDetails(product:Product):void {
+	            var move		 :  Move					 = null;
+	            var first		 :  Boolean 				 = true;
+	            var selectedThumb:  ProductCatalogThumbnail	 = null;
+	            var row			 :  int 					 = -1;
+	
+	            //should be computed using border metrics instead of hard-coding the 20, but...
+				var xTo			:	Number 					 = thumbContent.width - ProductCatalogThumbnail.COL_WIDTH_4 - 20;
+	            var yTo			:	Number					 = 0;
+	
+				for each (var thumb : ProductCatalogThumbnail in __thumbnails) {
+				    var it:Product = thumb.product;
+				    
+	                if (thumb.visible)
+					{
+	                    row++;
+	                    yTo = row * (ProductCatalogThumbnail.COL_HEIGHT_4 + ProductCatalogThumbnail.VERTICAL_GAP);
+	
+	                    thumb.currentState = "4cols";
+	
+	                    if (thumb.x != xTo || thumb.y != yTo)
+						{
+	                        move = new Move(thumb);
+	                        if (first)
+							{
+	                            move.addEventListener(EffectEvent.EFFECT_END,
+									function(event:EffectEvent):void
+									{
+										details.product = product;
+	                                    currentState = "details";
+									}, false, 0, true);
+	
+	                            first = false;
+	                        }
+	                        move.xTo = xTo;
+	                        move.yTo = yTo;
+	                        move.play();
+	                    }
+	                    
+	                    if (thumb.product == product)
+	                    {
+	                        selectedThumb = thumb;
+	                    }
+	                }
+	            }
+	            
+	            if (selectedThumb != null)
+	            {
+	                //make sure that the selected thumb is visible in the list on the right
+	                move.addEventListener(EffectEvent.EFFECT_END,
+						function(e:EffectEvent):void
+						{
+						    var curpos:int = thumbContent.verticalScrollPosition;
+						    if (selectedThumb.y < curpos)
+						    {
+						        thumbContent.verticalScrollPosition = y;
+						    }
+						    else if (selectedThumb.y + ProductCatalogThumbnail.COL_HEIGHT_4 > curpos + thumbContent.height)
+						    {
+						        //this logic doesn't seem to be perfect but it will do
+						        var diff:int = selectedThumb.y - (curpos + thumbContent.height)
+						        thumbContent.verticalScrollPosition += diff + ProductCatalogThumbnail.COL_HEIGHT_4 + ProductCatalogThumbnail.VERTICAL_GAP;
+						    }
+						}, false, 0, true);
+	            }
+				
+			}
+
+	        private function animateLayouts():Effect
+	        {
+				var move:  Move = null;
+	            var row :  int = 0;
+	            var col :  int = -1;
+	
+				for each (var thumb : ProductCatalogThumbnail in __thumbnails) {
+	                var product:Product = thumb.product;
+	                
+	                if (isShowing(product) == true)
+	                {
+	                    thumb.currentState = "" + tileColumns + "cols";
+	                    col++;
+	                    if (col > tileColumns - 1)
+						{
+	                        row++;
+	                        col = 0;
+	                    }
+	
+	                    var xTo:Number = col * (tileWidth + ProductCatalogThumbnail.HORIZONTAL_GAP);
+	                    var yTo:Number = row * (tileHeight + ProductCatalogThumbnail.VERTICAL_GAP);
+	
+	                    // If the thumbnail is already visible
+						// animate it to its new position.
+	                    if (thumb.visible)
+						{
+	                        // Animate only if the position is different
+							// from its current position.
+	                        if (thumb.x != xTo || thumb.y != yTo)
+							{
+	                            move = new Move(thumb);
+	                            move.xTo = xTo;
+	                            move.yTo = yTo;
+	                            move.play();
+	                        }
+	                    }
+	
+	                    // If the thumbnail was not previously visible, sets its
+						// x and y coordinates. We'll make it reappear after all
+	                    // the visible __thumbnails have reached their new position.
+						else
+						{
+	                        thumb.x = xTo;
+	                        thumb.y = yTo;
+	                        thumb.includeInLayout = true;
+	                    }
+	                }
+					else
+					{
+	                    thumb.visible = false;
+	                    thumb.includeInLayout = false;
+	                }
+	            }
+	
+	            if (!move)
+				{
+	                // No visible __thumbnails were animated to a new position;
+					// fade in newly selected __thumbnails right away.
+	                animateFadeIn();
+	            }
+				else
+				{
+				    //since movement is happening get the scrollbar back to the top
+					thumbContent.verticalScrollPosition = 0;
+	                // Fade in newly selected __thumbnails after the last
+					// visible thumbnail has moved to its new position.
+	                move.addEventListener( EffectEvent.EFFECT_END,
+											function(event:EffectEvent):void
+											{
+												animateFadeIn();
+											}, false, 0, true);
+	            }
+	            
+	            //return the last move to watch
+	            return move;
+	        }
+	        
+	        //return the last effect so we could add effectEnd handler if desired
+	        private function animateFadeIn():Effect
+			{
+				var effect  :  Fade  = null
+				var targets :  Array = [];
+				
+				for each (var thumb:ProductCatalogThumbnail in __thumbnails) {
+				    if (isShowing(thumb.product) && !thumb.visible)
+					{
+	                    thumb.alpha = 0;
+	                    thumb.visible = true;
+	                    targets.push(thumb);
+	                }
+	            }
+
+	            if (targets.length > 0)	{
+	            	effect = new Fade();	            	
+
+					effect.alphaTo = 1;
+	                effect.targets = targets;
+	                effect.play();
+	            }
+	            
+	            return effect;
+	        }
+
+        	// *******************************************************************
+        	// Private Methods
+        	// *******************************************************************
+        
+        	private function isShowing(product:Product):Boolean {
+        		return __accepted[product];
+        	}
+        	
+	        private function showProduct(product:Product, isVisible:Boolean = true) :void {
+				if (__accepted == null) __accepted = new Dictionary(true);	        	
+	        	__accepted[product] = isVisible;
+	        }
+	        
+	        private function findByID(prodID : int):Product {
+	        	var results : Product = null;
+	        	for each (var product:Product in __catalog) {
+	        		if (product.productId == prodID) {
+	        			results = product;
+	        			break;
+	        		}
+	        	}
+	        	
+	        	return results;
+	        }
+			
+        	// *******************************************************************
+        	// Private Properties for layout of rendered items
+        	// *******************************************************************
+        	
+        	private function get tileWidth():Number {
+	            var results : Number = ProductCatalogThumbnail.COL_WIDTH_2;
+	
+	            if (__filerCount > 9 || currentState == "compare")	{
+	                results = ProductCatalogThumbnail.COL_WIDTH_4;
+	                results = (currentState == "compare") 			?
+	                    		ProductCatalogThumbnail.COMPARE_WIDTH	:
+	                    		ProductCatalogThumbnail.COL_WIDTH_4;
+	            }
+	            else if (__filerCount > 4)		results = ProductCatalogThumbnail.COL_WIDTH_3;
+	            
+	            return results;
+        	}        	
+        	private function get tileHeight():Number {
+	            var results : Number = ProductCatalogThumbnail.COL_HEIGHT_2;
+	
+	            if (__filerCount > 9 || currentState == "compare")	{
+	                results = (currentState == "compare")
+				                    ? height - 4
+				                    : ProductCatalogThumbnail.COL_HEIGHT_4;
+	            }
+	            else if (__filerCount > 4)			results = ProductCatalogThumbnail.COL_HEIGHT_3;
+				
+				return results;
+        	}
+        	private function get tileColumns():int {
+	            var numCols : int = 2;
+	
+	            if (__filerCount > 9 || currentState == "compare")		numCols = 4;
+	            else if (__filerCount > 4)								numCols = 3;
+				
+				return numCols;        		
+        	}
+
+        	// *******************************************************************
+        	// Private Attributes
+        	// *******************************************************************
+        	
+        	
+				        private var __catalog		:  ArrayCollection = new ArrayCollection();
+						private var __catalogChanged:  Boolean	  	   = false;
+						private var __startAnimate  :  Boolean         = false;
+						
+				        private var __accepted		:  Dictionary = new Dictionary();
+				        private var __thumbnails	:  Array      = [];
+				        
+				        private var __filerCount	:  int		  = 0;
+	        			private var __thumbnailState:  String 	  = 'browse'; //either 'browse' or 'compare'
+
+						//the buttons that also allow the panel to switch sides
+	        [Bindable]	private var titleButtons	:  CatalogTitleButtons = null; 
+	        
+        ]]>
+    </mx:Script>
+    
+    <mx:Binding source="cartCount" destination="titleButtons.cartCount" />
+    <!-- two-way binding between the states of panel title buttons and the product view state -->
+    <mx:Binding source="ProductsView(parentDocument).currentState" destination="titleButtons.currentState" />
+    <mx:Binding destination="ProductsView(parentDocument).currentState" source="titleButtons.currentState" />
+
+    <mx:Canvas width="100%" height="100%" 
+        verticalScrollPolicy="off"
+        horizontalScrollPolicy="off"
+		
+		>
+        <mx:Canvas id="thumbContent" width="100%" height="100%" 
+            horizontalScrollPolicy="off"/>
+        <browser:ProductDetails id="details"
+            width="{ProductCatalogThumbnail.COL_WIDTH_4 * 3}"
+            height="100%"
+            visible="false"
+            compare="onProductSelected(event)"
+            purchase="onProductSelected(event)"
+            browse="onProductSelected(event)" 
+            xmlns:browser="com.flexstore.view.products.browser.*"/>
+    </mx:Canvas>
+    
+    <mx:states>
+        <mx:State name="browse">
+            <mx:SetProperty name="title" value="Browse"/>
+        </mx:State>
+
+        <mx:State name="compare">
+            <mx:SetProperty name="title" value="Product Comparison"/>
+        </mx:State>
+
+        <mx:State name="details">
+            <mx:SetProperty name="title" value="Product Details"/>
+            <mx:SetProperty target="{details}" name="visible" value="true"/>
+        </mx:State>
+    </mx:states>
+    
+</mx:Panel>

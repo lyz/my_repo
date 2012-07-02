@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2003-2006 Adobe Macromedia Software LLC and its licensors.
+// All Rights Reserved.
+// The following is Sample Code and is subject to all restrictions on such code
+// as contained in the End User License Agreement accompanying this product.
+// If you have received this file from a source other than Adobe,
+// then your use, modification, or distribution of it requires
+// the prior written permission of Adobe.
+//
+////////////////////////////////////////////////////////////////////////////////
+-->
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+    borderStyle="solid"
+    horizontalScrollPolicy="off"
+    dragEnter="onDragEnter(event)"
+    dragDrop="onDragDrop(event)"
+    backgroundAlpha="0" backgroundColor="#FF0000"> <!-- need a background color for drag and drop but can set alpha to 0 -->
+    
+    <mx:Metadata>
+       [Event(name="addProduct", 		type="com.flexstore.view.products.cart.ProductListEvent")]
+       [Event(name="duplicateProduct", 	type="com.flexstore.view.products.cart.ProductListEvent")]
+       [Event(name="productQtyChange", 	type="com.flexstore.view.products.cart.ProductListEvent")]
+       [Event(name="removeProduct", 	type="com.flexstore.view.products.cart.ProductListEvent")]
+    </mx:Metadata>
+
+    <mx:Script>
+        <![CDATA[
+        	import mx.collections.ArrayCollection;
+	        import mx.core.*;
+	        import mx.effects.*;
+	        import mx.events.*;
+	        import mx.managers.DragManager;
+	        import mx.effects.EffectManager;
+	        
+	        import com.flexstore.model.vo.Product;
+	        import com.flexstore.view.products.cart.ProductListEvent;
+	        
+			// ****************************************************************************
+			// Public Properties
+			// ****************************************************************************
+
+	        
+				        public var newItemStartX  :  int;
+				        public var newItemStartY  :  int;
+	        [Bindable]	public var maxItems		  :  int;
+	        			public var showQuantity	  :  Boolean;
+	        
+	        [Bindable]
+	        public function get products():ArrayCollection {
+	        	return __products;
+	        }
+	        public function set products(val:ArrayCollection):void {
+	        	if (val != __products) {
+	        		__productsChanged = true;	        		
+	        		
+	        		if (__products != null) __products.removeEventListener(CollectionEvent.COLLECTION_CHANGE,onProductsChanged);
+	        		
+	        		__products        = val;
+	        		__products.addEventListener(CollectionEvent.COLLECTION_CHANGE,onProductsChanged);
+	        		
+	        		invalidateProperties();
+	        	}
+	        }
+	        
+			// ****************************************************************************
+			// Override protected UIComponent lifecycle methods
+			// ****************************************************************************
+
+			override protected function commitProperties():void {
+				super.commitProperties();
+				
+				if (__productsChanged == true) {
+					__productsChanged = false;
+					
+					removeAll();
+					for each (var it:Product in __products) {
+						onProductAdded(it,false,false);
+					}
+					
+					animateLayoutChanges(__items.length - 1, false);						
+				}	
+				
+			}
+
+			// ****************************************************************************
+			// Private Methods
+			// ****************************************************************************
+
+	        private function onProductAdded(product:Product, animate:Boolean = true, announce:Boolean = true):void {
+	            if (alreadyContains(product) == true)
+				{
+				    item = findItemRenderer(product);
+				    addToAnimation(item);
+	            }
+				else
+				{
+	                var item : ProductListItem = makeItemRenderer(product);
+	                
+	                if (item != null) {
+	                    addChild(item);
+	                    if (animate  == true) animateLayoutChanges(__items.length - 1, true);
+	                }
+	            }
+	        }
+	        
+	        private function onProductRemoved(product:Product):void {
+	            if (alreadyContains(product) == true) {
+				    var item : ProductListItem = findItemRenderer(product);
+				    if (item != null) removeItemRenderer(item);
+				}
+	        }
+	        
+			private function removeAll():void {
+				removeAllChildren();
+				__items = new Array();		
+			}
+
+			// *****************************************************************
+			// Management of Renderer Items
+			// *****************************************************************
+			
+			private function makeItemRenderer(product:Product):ProductListItem {
+ 				var item  : ProductListItem = null; 
+ 				var index : int             = __items.length;
+
+                if (maxItems <= 0 || index < maxItems)
+				{
+				    item = new ProductListItem();
+
+					// Allows items to self-remove
+				    item.addEventListener(ProductListEvent.PRODUCT_REMOVE, onRemoveRenderer, false, 0, true);
+
+			        item.currentState = showQuantity ? 'showQuantity' : "";
+				    item.product      = product;
+				    item.percentWidth = 100;
+
+					// Add to registry of renderers for each Product
+                    __items[index] = item;
+    			}
+    			
+    			return item;					
+			}
+	        
+	        private function removeItemRenderer(item:ProductListItem):void {
+	            var index : int             = indexOf(item.product.productId);
+	            
+	            // Remove from registry and UI container
+	            __items.splice(index, 1);	            
+	            removeChild(item);
+	            
+	            animateLayoutChanges(index);	        	
+	        }
+	        
+	        private function findItemRenderer(product:Product):ProductListItem {
+	        	var results : ProductListItem = null;
+	        	var index   : int             = indexOf(product.productId);
+	        	
+	        	if (index > -1) {
+	        		results = __items[index] as ProductListItem;
+	        	}
+	        	
+	        	return results;
+	        }
+	        
+			// *****************************************************************
+			// Animation of layouts of rendered items
+			// *****************************************************************
+			
+			private function addToAnimation(item:ProductListItem):void {
+				if (item == null) return;
+				
+			    //if we don't keep track of what's playing a double-click can
+			    //cause the list item to keep rising
+			    if (__playingEffects[item] == null)
+			    {
+	                var jump:Sequence = new Sequence();
+	                var m1:Move = new Move(item)
+	                m1.yBy = -5;
+	                var m2:Move = new Move(item)
+	                m2.yBy = 5;
+	                jump.addChild(m1);
+	                jump.addChild(m2);
+	                jump.duration = 150;
+	                __playingEffects[item] = jump;
+	                jump.addEventListener(	EffectEvent.EFFECT_END, 
+	                						function(event:Event):void {
+						                       delete __playingEffects[item];
+						                    }
+						                  );
+	                jump.play();
+	            }
+			}	
+						            
+	        private function animateLayoutChanges(startIndex:int, scrollToBottom:Boolean=false):void {
+	        	if (startIndex < 0) return;
+	        	
+	            var n:int = __items.length;
+	            var e:Move;
+				for (var i:int = startIndex; i < n ; i++)
+				{
+				    var item:ProductListItem = __items[i];
+	                var yTo:Number = i * (item.height);
+	                //still need to prevent items that are already in motion from getting
+	                //jumpy
+				    if (__playingEffects[item] == null)
+				    {
+	                    e = new Move(item);
+	                    if (item.x == 0 && item.y == 0)
+	    				{
+	    					e.xFrom = newItemStartX;
+	    					e.yFrom = newItemStartY;
+	                    }
+	    
+	                    e.xTo = 0;
+	                    e.yTo = yTo;
+	                    __playingEffects[item] = e;
+	                    e.addEventListener(EffectEvent.EFFECT_END, function(event:Event):void
+	                    {
+	                       delete __playingEffects[item];
+	                    });
+	                    e.play();
+	                }
+	                else
+	                {
+	                    __playingEffects[item].pause();
+	                    __playingEffects[item].yTo = yTo;
+	                    __playingEffects[item].play();
+	                }
+	            }
+	            //get the last event and if we should scroll make sure we can validate
+	            //and scroll to maxVPosition
+	            if (scrollToBottom)
+	            {
+	                e.addEventListener(EffectEvent.EFFECT_END, function(event:Event):void
+	                {
+	                    validateNow();
+	                    verticalScrollPosition = maxVerticalScrollPosition;    
+	                });
+	            }
+	        }
+	        
+	        // *******************************************************************
+	        // Lookup Methods for Products and associated Renderers
+	        // *******************************************************************
+				        
+	        private function alreadyContains(product:Product):Boolean {
+	        	return (indexOf(product.productId) != -1);
+	        }
+	        
+	        private function indexOf(productId:int):int {
+	            var index:int = -1;
+	
+	            var n:int = __items.length;
+				for (var i:int = 0; i < __items.length; i++) {
+	                if (__items[i].product.productId == productId)
+					{
+	                    index = i;
+	                    break;
+	                }
+	            }
+	
+	            return index;
+	        }     
+	
+			// *****************************************************************
+			// Event Handlers
+			// *****************************************************************
+			
+			private function onProductsChanged(event:CollectionEvent):void {
+				var products : Array   = event.items;
+				var it       : Product = null;
+				
+				switch(event.kind) {
+					case CollectionEventKind.ADD   :	for each (it in products) {
+															if (alreadyContains(it) != true) {
+																onProductAdded(it,true,false);
+															}
+														}	
+														break;
+					case CollectionEventKind.REMOVE:	for each (it in products) {
+															if (alreadyContains(it) != true) {
+																onProductRemoved(it);
+															}
+														}	
+														break;
+					
+					default                      :      break;
+				}
+			}
+			
+			
+	        /**
+	          * Renderer itself can dispatch a remove request; which is 
+	          * handled here at the ProductList level.
+	          * 
+	          * @param event Details for which renderer instance requested self-removal
+	          */
+	        private function onRemoveRenderer(event:Event):void {
+	            var item  : ProductListItem = event.target as ProductListItem;
+	            
+	            removeItemRenderer(item);
+	        }
+	        
+			// *****************************************************************
+			// Support for drag and drop from the Catalog Panel
+			// *****************************************************************
+					
+	        private function onDragEnter(event:DragEvent):void {
+	            if (event.dragSource.hasFormat("product"))  {
+	                DragManager.acceptDragDrop(IUIComponent(event.target));
+	            }
+	        }
+	
+	        private function onDragDrop(event:DragEvent):void  {
+	            var product:Product = event.dragSource.dataForFormat("product") as Product;
+	            dispatchEvent(new ProductListEvent(ProductListEvent.PRODUCT_ADD,product));
+	        }  
+
+			// *****************************************************************
+			// Private Attributes
+			// *****************************************************************
+					
+			private var __products			:   ArrayCollection = null;	 
+			private var __productsChanged	:   Boolean			= false;
+			
+	        private var __items				:	Array 			= [];
+	        private var __playingEffects	:	Dictionary 		= new Dictionary(true);
+	        
+        ]]>
+    </mx:Script>
+    
+</mx:Canvas>

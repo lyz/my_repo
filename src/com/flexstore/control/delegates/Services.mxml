@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mvc:ServiceLocator xmlns:mvc="com.adobe.cairngorm.business.*" 
+					 xmlns:mx="http://www.adobe.com/2006/mxml">
+	
+	 <!-- RDS to load Catalog XML data -->
+	 <mx:HTTPService id="catalogService"
+	 				 resultFormat="e4x" 
+	 				 url="data/catalog.xml"	/>
+	 				 
+	 <mx:HTTPService id="shoppingCartService"
+	 				 resultFormat="e4x"
+	 				 url="index.cfm?event=loadShoppingCart" />	 				 
+	 
+</mvc:ServiceLocator>

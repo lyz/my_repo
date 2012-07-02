@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2003-2006 Adobe Macromedia Software LLC and its licensors.
+// All Rights Reserved.
+// The following is Sample Code and is subject to all restrictions on such code
+// as contained in the End User License Agreement accompanying this product.
+// If you have received this file from a source other than Adobe,
+// then your use, modification, or distribution of it requires
+// the prior written permission of Adobe.
+//
+////////////////////////////////////////////////////////////////////////////////
+-->
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml"     
+    horizontalAlign="right"
+    paddingTop="8"
+    paddingBottom="8"
+    paddingRight="4"
+    paddingLeft="4"
+    horizontalScrollPolicy="off"
+    verticalScrollPolicy="off">
+    
+    <mx:Script>
+        <![CDATA[
+        import mx.controls.Alert;
+        
+       	import com.adobe.cairngorm.control.CairngormEvent;
+
+    	import com.flexstore.control.events.shoppingcart.AddProductToCartEvent;
+    	import com.flexstore.control.events.shoppingcart.RemoveProductFromCartEvent;
+    	import com.flexstore.control.events.shoppingcart.UpdateCartQuantityEvent;
+    	import com.flexstore.model.ModelLocator;
+    	import com.flexstore.model.OrderCart;
+        import com.flexstore.model.vo.Product;
+        import com.flexstore.view.products.cart.ProductListEvent;
+
+        private function onChangeCart(event:ProductListEvent):void {
+        	var announce : CairngormEvent = null;
+        	
+            switch (event.type)
+            {
+                case ProductListEvent.PRODUCT_ADD		: announce = new AddProductToCartEvent(event.product);							break;
+                case ProductListEvent.PRODUCT_DUPLICATE	: announce = new AddProductToCartEvent(event.product);							break;
+                case ProductListEvent.PRODUCT_QTY_CHANGE: announce = new UpdateCartQuantityEvent(event.product, event.product.qty);		break;
+                case ProductListEvent.PRODUCT_REMOVE	: announce = new RemoveProductFromCartEvent(event.product);						break;
+            }
+            
+            announce.dispatch();
+        }
+        
+        [Bindable] private var __shoppingCart : OrderCart 				 = ModelLocator.getInstance().shoppingCart;
+        	
+        ]]>
+    </mx:Script>
+    
+    <mx:CurrencyFormatter currencySymbol="$" id="cf" precision="2"/>
+    
+    <mx:Label width="100%" text="Your Shopping Cart" styleName="sectionHeader"/>
+        
+    <view:ProductList 	id="productList" 
+				        showQuantity="true"
+    				  	height="100%" width="100%"
+        			  	newItemStartX="-100" newItemStartY="-100" 
+        			  	products="{__shoppingCart.products}"
+				        addProduct="onChangeCart(event)"
+				        duplicateProduct="onChangeCart(event)"
+				        productQtyChange="onChangeCart(event)"
+				        removeProduct="onChangeCart(event)"
+				        xmlns:view="com.flexstore.view.products.cart.*"/>
+    
+    <mx:Form verticalGap="0" paddingRight="0">
+        <mx:FormItem label="Total:">
+            <mx:Label width="70" text="{cf.format(__shoppingCart.subTotal)}" textAlign="right"/>
+        </mx:FormItem>
+
+        <mx:FormItem label="Shipping:">
+            <mx:Label width="70" text="{cf.format(__shoppingCart.shipping)}" textAlign="right"/>
+        </mx:FormItem>
+
+        <mx:FormItem label="Grand Total:" fontWeight="bold">
+            <mx:Label width="70" text="{cf.format(__shoppingCart.total)}" textAlign="right"/>
+        </mx:FormItem>
+    </mx:Form>
+
+    <mx:Button label="Submit Order"  click="Alert.show('This feature is not implemented in this sample', 'Submit Order')"/>
+
+</mx:VBox>
